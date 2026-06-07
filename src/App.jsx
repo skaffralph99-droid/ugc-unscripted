@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import {
   Plus, Search, Users, Phone, MessageCircle, CheckCircle, XCircle,
@@ -50,15 +50,27 @@ function StatCard({ icon: Icon, label, value, color, delay }) {
   )
 }
 
-// ─── Status Dropdown (inline) ────────────────────────────
+// ─── Status Dropdown (inline, fixed position) ───────────
 function StatusDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef(null)
   const current = STATUSES.find(s => s.value === value) || STATUSES[0]
 
+  const handleOpen = (e) => {
+    e.stopPropagation()
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.top - 4, left: rect.left })
+    }
+    setOpen(!open)
+  }
+
   return (
-    <div className="relative">
+    <>
       <button
-        onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
+        ref={btnRef}
+        onClick={handleOpen}
         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all hover:ring-1 hover:ring-surface-600 ${current.color}`}
       >
         {current.label}
@@ -66,8 +78,11 @@ function StatusDropdown({ value, onChange }) {
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full left-0 mb-1 z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-xl py-1 min-w-[140px] animate-scale-in">
+          <div className="fixed inset-0 z-[100]" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-[101] bg-surface-900 border border-surface-700 rounded-lg shadow-xl py-1 min-w-[140px] animate-scale-in"
+            style={{ top: pos.top, left: pos.left, transform: 'translateY(-100%)' }}
+          >
             {STATUSES.map(s => (
               <button
                 key={s.value}
@@ -81,7 +96,7 @@ function StatusDropdown({ value, onChange }) {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }
 
