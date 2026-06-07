@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { supabase } from './supabase'
 import {
   Plus, Search, Users, Phone, MessageCircle, CheckCircle, XCircle,
   Edit3, Trash2, X, Instagram, ExternalLink, ChevronDown, ChevronUp,
-  Zap, TrendingUp, Filter, Download, CalendarDays, Clock, UserPlus, Handshake
+  Zap, TrendingUp, Filter, Download, CalendarDays, Clock, UserPlus,
+  Handshake, Loader2, RefreshCw
 } from 'lucide-react'
 
 const STATUSES = [
@@ -20,7 +22,6 @@ const NICHES = [
 ]
 
 const emptyCreator = {
-  id: '',
   name: '',
   phone: '',
   instagram: '',
@@ -29,25 +30,6 @@ const emptyCreator = {
   followers: '',
   status: 'new',
   notes: '',
-  createdAt: '',
-  statusUpdatedAt: '',
-}
-
-function useLocalStorage(key, initialValue) {
-  const [value, setValue] = useState(() => {
-    try {
-      const item = localStorage.getItem(key)
-      return item ? JSON.parse(item) : initialValue
-    } catch {
-      return initialValue
-    }
-  })
-
-  useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value))
-  }, [key, value])
-
-  return [value, setValue]
 }
 
 // ─── Stat Card ────────────────────────────────────────────
@@ -65,16 +47,6 @@ function StatCard({ icon: Icon, label, value, color, delay }) {
       <p className="text-2xl font-bold font-mono tracking-tight">{value}</p>
       <p className="text-sm text-surface-400 mt-1">{label}</p>
     </div>
-  )
-}
-
-// ─── Status Badge ─────────────────────────────────────────
-function StatusBadge({ status }) {
-  const s = STATUSES.find(st => st.value === status) || STATUSES[0]
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}>
-      {s.label}
-    </span>
   )
 }
 
@@ -114,7 +86,7 @@ function StatusDropdown({ value, onChange }) {
 }
 
 // ─── Creator Modal ────────────────────────────────────────
-function CreatorModal({ creator, onSave, onClose, isEdit }) {
+function CreatorModal({ creator, onSave, onClose, isEdit, saving }) {
   const [form, setForm] = useState(creator)
 
   const handleChange = (field, value) => {
@@ -123,12 +95,7 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
 
   const handleSubmit = () => {
     if (!form.name.trim()) return
-    onSave({
-      ...form,
-      id: form.id || crypto.randomUUID(),
-      createdAt: form.createdAt || new Date().toISOString(),
-      statusUpdatedAt: form.statusUpdatedAt || new Date().toISOString(),
-    })
+    onSave(form)
   }
 
   return (
@@ -137,7 +104,6 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
         className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-800">
           <h2 className="text-lg font-semibold">
             {isEdit ? 'Edit Creator' : 'Add Creator'}
@@ -147,9 +113,7 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Name */}
           <div>
             <label className="block text-xs font-medium text-surface-400 mb-1.5">Name *</label>
             <input
@@ -161,7 +125,6 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
             />
           </div>
 
-          {/* Phone + Niche */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-surface-400 mb-1.5">Phone</label>
@@ -186,7 +149,6 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
             </div>
           </div>
 
-          {/* Instagram + TikTok */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-surface-400 mb-1.5">Instagram</label>
@@ -216,7 +178,6 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
             </div>
           </div>
 
-          {/* Followers + Status */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-surface-400 mb-1.5">Followers</label>
@@ -240,7 +201,6 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
             </div>
           </div>
 
-          {/* Notes */}
           <div>
             <label className="block text-xs font-medium text-surface-400 mb-1.5">Notes</label>
             <textarea
@@ -253,19 +213,16 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-surface-800">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-surface-400 hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="px-4 py-2 text-sm text-surface-400 hover:text-white transition-colors">
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!form.name.trim()}
-            className="px-5 py-2 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={!form.name.trim() || saving}
+            className="px-5 py-2 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
+            {saving && <Loader2 size={14} className="animate-spin" />}
             {isEdit ? 'Save Changes' : 'Add Creator'}
           </button>
         </div>
@@ -275,7 +232,7 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
 }
 
 // ─── Delete Confirm ───────────────────────────────────────
-function DeleteConfirm({ name, onConfirm, onCancel }) {
+function DeleteConfirm({ name, onConfirm, onCancel, deleting }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onCancel}>
       <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-sm shadow-2xl animate-scale-in p-6" onClick={e => e.stopPropagation()}>
@@ -287,7 +244,12 @@ function DeleteConfirm({ name, onConfirm, onCancel }) {
           <button onClick={onCancel} className="px-4 py-2 text-sm text-surface-400 hover:text-white transition-colors">
             Cancel
           </button>
-          <button onClick={onConfirm} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {deleting && <Loader2 size={14} className="animate-spin" />}
             Delete
           </button>
         </div>
@@ -301,7 +263,7 @@ function exportCSV(creators) {
   const headers = ['Name', 'Phone', 'Instagram', 'TikTok', 'Niche', 'Followers', 'Status', 'Notes', 'Added']
   const rows = creators.map(c => [
     c.name, c.phone, c.instagram, c.tiktok, c.niche, c.followers,
-    c.status, c.notes.replace(/,/g, ';'), new Date(c.createdAt).toLocaleDateString()
+    c.status, (c.notes || '').replace(/,/g, ';'), new Date(c.created_at).toLocaleDateString()
   ])
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
@@ -315,16 +277,46 @@ function exportCSV(creators) {
 
 // ─── Main App ─────────────────────────────────────────────
 export default function App() {
-  const [creators, setCreators] = useLocalStorage('ugc-creators', [])
+  const [creators, setCreators] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editCreator, setEditCreator] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [sortField, setSortField] = useState('createdAt')
+  const [sortField, setSortField] = useState('created_at')
   const [sortDir, setSortDir] = useState('desc')
 
-  // Stats
+  // ─── Fetch creators from Supabase ──────────────────────
+  const fetchCreators = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('ugc_creators')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setCreators(data)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    fetchCreators()
+
+    // Real-time subscription so all devices stay in sync
+    const channel = supabase
+      .channel('ugc_creators_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ugc_creators' }, () => {
+        fetchCreators()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchCreators])
+
+  // ─── Stats ─────────────────────────────────────────────
   const stats = useMemo(() => {
     const total = creators.length
     const contacted = creators.filter(c => c.status === 'contacted').length
@@ -333,24 +325,21 @@ export default function App() {
     const completed = creators.filter(c => c.status === 'completed').length
     const declined = creators.filter(c => c.status === 'declined').length
     const newCount = creators.filter(c => c.status === 'new').length
-    const active = contacted + negotiating + booked
     const conversionRate = total > 0 ? Math.round(((booked + completed) / total) * 100) : 0
 
-    // Time-based stats
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString()
 
     const contactedToday = creators.filter(c =>
-      c.status !== 'new' && (c.statusUpdatedAt || c.createdAt) >= todayStart
+      c.status !== 'new' && (c.status_updated_at || c.created_at) >= todayStart
     ).length
 
-    const addedToday = creators.filter(c => c.createdAt >= todayStart).length
-
-    const addedThisWeek = creators.filter(c => c.createdAt >= weekStart).length
+    const addedToday = creators.filter(c => c.created_at >= todayStart).length
+    const addedThisWeek = creators.filter(c => c.created_at >= weekStart).length
 
     const bookedThisWeek = creators.filter(c =>
-      (c.status === 'booked' || c.status === 'completed') && (c.statusUpdatedAt || c.createdAt) >= weekStart
+      (c.status === 'booked' || c.status === 'completed') && (c.status_updated_at || c.created_at) >= weekStart
     ).length
 
     const responseRate = (contacted + negotiating + booked + completed + declined) > 0 && total > 0
@@ -359,12 +348,11 @@ export default function App() {
 
     return {
       total, contacted, negotiating, booked, completed, declined, newCount,
-      active, conversionRate, contactedToday, addedToday, addedThisWeek,
-      bookedThisWeek, responseRate
+      conversionRate, contactedToday, addedToday, addedThisWeek, bookedThisWeek, responseRate
     }
   }, [creators])
 
-  // Filtered & sorted
+  // ─── Filtered & sorted ─────────────────────────────────
   const filtered = useMemo(() => {
     let list = [...creators]
 
@@ -372,10 +360,10 @@ export default function App() {
       const q = search.toLowerCase()
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
-        c.instagram.toLowerCase().includes(q) ||
-        c.tiktok.toLowerCase().includes(q) ||
-        c.niche.toLowerCase().includes(q) ||
-        c.notes.toLowerCase().includes(q)
+        (c.instagram || '').toLowerCase().includes(q) ||
+        (c.tiktok || '').toLowerCase().includes(q) ||
+        (c.niche || '').toLowerCase().includes(q) ||
+        (c.notes || '').toLowerCase().includes(q)
       )
     }
 
@@ -393,23 +381,76 @@ export default function App() {
     return list
   }, [creators, search, statusFilter, sortField, sortDir])
 
-  const handleSave = (creator) => {
-    setCreators(prev => {
-      const exists = prev.find(c => c.id === creator.id)
-      if (exists) return prev.map(c => c.id === creator.id ? creator : c)
-      return [creator, ...prev]
-    })
+  // ─── CRUD operations ──────────────────────────────────
+  const handleSave = async (formData) => {
+    setSaving(true)
+    if (editCreator) {
+      // Update
+      const { error } = await supabase
+        .from('ugc_creators')
+        .update({
+          name: formData.name,
+          phone: formData.phone,
+          instagram: formData.instagram,
+          tiktok: formData.tiktok,
+          niche: formData.niche,
+          followers: formData.followers,
+          status: formData.status,
+          notes: formData.notes,
+          status_updated_at: formData.status !== editCreator.status ? new Date().toISOString() : editCreator.status_updated_at,
+        })
+        .eq('id', editCreator.id)
+
+      if (!error) {
+        await fetchCreators()
+      }
+    } else {
+      // Insert
+      const { error } = await supabase
+        .from('ugc_creators')
+        .insert({
+          name: formData.name,
+          phone: formData.phone,
+          instagram: formData.instagram,
+          tiktok: formData.tiktok,
+          niche: formData.niche,
+          followers: formData.followers,
+          status: formData.status,
+          notes: formData.notes,
+          status_updated_at: new Date().toISOString(),
+        })
+
+      if (!error) {
+        await fetchCreators()
+      }
+    }
+    setSaving(false)
     setModalOpen(false)
     setEditCreator(null)
   }
 
-  const handleDelete = () => {
-    setCreators(prev => prev.filter(c => c.id !== deleteTarget.id))
+  const handleDelete = async () => {
+    setDeleting(true)
+    const { error } = await supabase
+      .from('ugc_creators')
+      .delete()
+      .eq('id', deleteTarget.id)
+
+    if (!error) {
+      await fetchCreators()
+    }
+    setDeleting(false)
     setDeleteTarget(null)
   }
 
-  const handleStatusChange = (id, newStatus) => {
-    setCreators(prev => prev.map(c => c.id === id ? { ...c, status: newStatus, statusUpdatedAt: new Date().toISOString() } : c))
+  const handleStatusChange = async (id, newStatus) => {
+    await supabase
+      .from('ugc_creators')
+      .update({ status: newStatus, status_updated_at: new Date().toISOString() })
+      .eq('id', id)
+
+    // Optimistic update
+    setCreators(prev => prev.map(c => c.id === id ? { ...c, status: newStatus, status_updated_at: new Date().toISOString() } : c))
   }
 
   const toggleSort = (field) => {
@@ -426,6 +467,18 @@ export default function App() {
     return sortDir === 'asc' ? <ChevronUp size={12} className="text-accent" /> : <ChevronDown size={12} className="text-accent" />
   }
 
+  // ─── Loading state ─────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-950 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-surface-400">
+          <Loader2 size={24} className="animate-spin text-accent" />
+          <span className="text-sm">Loading creators...</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-surface-950">
       {/* ─── Header ─────────────────────────────────── */}
@@ -440,13 +493,22 @@ export default function App() {
               <p className="text-xs text-surface-500">Creator Tracker</p>
             </div>
           </div>
-          <button
-            onClick={() => { setEditCreator(null); setModalOpen(true) }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-accent/20"
-          >
-            <Plus size={16} />
-            <span className="hidden sm:inline">Add Creator</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchCreators}
+              className="p-2.5 text-surface-500 hover:text-accent hover:bg-surface-800 rounded-lg transition-all"
+              title="Refresh"
+            >
+              <RefreshCw size={16} />
+            </button>
+            <button
+              onClick={() => { setEditCreator(null); setModalOpen(true) }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-accent/20"
+            >
+              <Plus size={16} />
+              <span className="hidden sm:inline">Add Creator</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -481,19 +543,15 @@ export default function App() {
               </button>
             </div>
             <div className="flex rounded-full overflow-hidden h-2.5 bg-surface-800">
-              {stats.total > 0 && (
-                <>
-                  {stats.contacted > 0 && <div className="bg-blue-500 transition-all" style={{ width: `${(stats.contacted / stats.total) * 100}%` }} />}
-                  {stats.negotiating > 0 && <div className="bg-orange-500 transition-all" style={{ width: `${(stats.negotiating / stats.total) * 100}%` }} />}
-                  {stats.booked > 0 && <div className="bg-green-500 transition-all" style={{ width: `${(stats.booked / stats.total) * 100}%` }} />}
-                  {stats.completed > 0 && <div className="bg-fuchsia-500 transition-all" style={{ width: `${(stats.completed / stats.total) * 100}%` }} />}
-                  {stats.declined > 0 && <div className="bg-stone-600 transition-all" style={{ width: `${(stats.declined / stats.total) * 100}%` }} />}
-                </>
-              )}
+              {stats.contacted > 0 && <div className="bg-blue-500 transition-all" style={{ width: `${(stats.contacted / stats.total) * 100}%` }} />}
+              {stats.negotiating > 0 && <div className="bg-orange-500 transition-all" style={{ width: `${(stats.negotiating / stats.total) * 100}%` }} />}
+              {stats.booked > 0 && <div className="bg-green-500 transition-all" style={{ width: `${(stats.booked / stats.total) * 100}%` }} />}
+              {stats.completed > 0 && <div className="bg-fuchsia-500 transition-all" style={{ width: `${(stats.completed / stats.total) * 100}%` }} />}
+              {stats.declined > 0 && <div className="bg-stone-600 transition-all" style={{ width: `${(stats.declined / stats.total) * 100}%` }} />}
             </div>
             <div className="flex items-center gap-4 mt-2.5 flex-wrap">
               {[
-                { label: 'New', count: stats.total - stats.contacted - stats.negotiating - stats.booked - stats.completed - stats.declined, dot: 'bg-surface-500' },
+                { label: 'New', count: stats.newCount, dot: 'bg-surface-500' },
                 { label: 'Contacted', count: stats.contacted, dot: 'bg-blue-500' },
                 { label: 'Negotiating', count: stats.negotiating, dot: 'bg-orange-500' },
                 { label: 'Booked', count: stats.booked, dot: 'bg-green-500' },
@@ -601,7 +659,6 @@ export default function App() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-xs text-surface-400 hover:text-pink-400 transition-colors"
-                              title={`@${creator.instagram}`}
                             >
                               <Instagram size={13} />
                               <span className="max-w-[80px] truncate">@{creator.instagram}</span>
@@ -613,7 +670,6 @@ export default function App() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-xs text-surface-400 hover:text-cyan-400 transition-colors"
-                              title={`@${creator.tiktok}`}
                             >
                               <ExternalLink size={13} />
                               <span className="max-w-[80px] truncate">@{creator.tiktok}</span>
@@ -666,11 +722,13 @@ export default function App() {
             </table>
           </div>
 
-          {/* Table footer */}
           {filtered.length > 0 && (
             <div className="px-4 py-3 border-t border-surface-800 flex items-center justify-between text-xs text-surface-500">
               <span>{filtered.length} creator{filtered.length !== 1 ? 's' : ''}</span>
-              <span>Data stored locally on this device</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                Synced across all devices
+              </span>
             </div>
           )}
         </div>
@@ -683,6 +741,7 @@ export default function App() {
           onSave={handleSave}
           onClose={() => { setModalOpen(false); setEditCreator(null) }}
           isEdit={!!editCreator}
+          saving={saving}
         />
       )}
 
@@ -691,6 +750,7 @@ export default function App() {
           name={deleteTarget.name}
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+          deleting={deleting}
         />
       )}
     </div>
