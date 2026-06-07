@@ -50,53 +50,21 @@ function StatCard({ icon: Icon, label, value, color, delay }) {
   )
 }
 
-// ─── Status Dropdown (inline, fixed position) ───────────
-function StatusDropdown({ value, onChange }) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState({ top: 0, left: 0 })
-  const btnRef = useRef(null)
+// ─── Status Select (native, always works) ───────────────
+function StatusSelect({ value, onChange }) {
   const current = STATUSES.find(s => s.value === value) || STATUSES[0]
 
-  const handleOpen = (e) => {
-    e.stopPropagation()
-    if (btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect()
-      setPos({ top: rect.top - 4, left: rect.left })
-    }
-    setOpen(!open)
-  }
-
   return (
-    <>
-      <button
-        ref={btnRef}
-        onClick={handleOpen}
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all hover:ring-1 hover:ring-surface-600 ${current.color}`}
-      >
-        {current.label}
-        <ChevronDown size={12} />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-[100]" onClick={() => setOpen(false)} />
-          <div
-            className="fixed z-[101] bg-surface-900 border border-surface-700 rounded-lg shadow-xl py-1 min-w-[140px] animate-scale-in"
-            style={{ top: pos.top, left: pos.left, transform: 'translateY(-100%)' }}
-          >
-            {STATUSES.map(s => (
-              <button
-                key={s.value}
-                onClick={(e) => { e.stopPropagation(); onChange(s.value); setOpen(false) }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-800 transition-colors flex items-center gap-2 ${value === s.value ? 'text-accent' : 'text-surface-300'}`}
-              >
-                <span className={`w-2 h-2 rounded-full ${s.value === 'new' ? 'bg-surface-500' : s.value === 'contacted' ? 'bg-blue-400' : s.value === 'negotiating' ? 'bg-orange-400' : s.value === 'booked' ? 'bg-green-400' : s.value === 'declined' ? 'bg-stone-400' : 'bg-fuchsia-400'}`} />
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer border-0 outline-none appearance-none ${current.color}`}
+      style={{ backgroundImage: 'none', paddingRight: '10px' }}
+    >
+      {STATUSES.map(s => (
+        <option key={s.value} value={s.value}>{s.label}</option>
+      ))}
+    </select>
   )
 }
 
@@ -704,7 +672,7 @@ export default function App() {
                         <span className="text-surface-300 font-mono text-xs">{creator.followers || '—'}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <StatusDropdown
+                        <StatusSelect
                           value={creator.status}
                           onChange={(newStatus) => handleStatusChange(creator.id, newStatus)}
                         />
