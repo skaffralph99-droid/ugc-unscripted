@@ -1,0 +1,661 @@
+import { useState, useEffect, useMemo } from 'react'
+import {
+  Plus, Search, Users, Phone, MessageCircle, CheckCircle, XCircle,
+  Edit3, Trash2, X, Instagram, ExternalLink, ChevronDown, ChevronUp,
+  Zap, TrendingUp, Filter, Download
+} from 'lucide-react'
+
+const STATUSES = [
+  { value: 'new', label: 'New', color: 'status-new' },
+  { value: 'contacted', label: 'Contacted', color: 'status-contacted' },
+  { value: 'negotiating', label: 'Negotiating', color: 'status-negotiating' },
+  { value: 'booked', label: 'Booked', color: 'status-booked' },
+  { value: 'declined', label: 'Declined', color: 'status-declined' },
+  { value: 'completed', label: 'Completed', color: 'status-completed' },
+]
+
+const NICHES = [
+  'Fashion', 'Beauty', 'Fitness', 'Food', 'Travel', 'Tech', 'Lifestyle',
+  'Gaming', 'Education', 'Comedy', 'Music', 'Health', 'Finance', 'Automotive', 'Other'
+]
+
+const emptyCreator = {
+  id: '',
+  name: '',
+  phone: '',
+  instagram: '',
+  tiktok: '',
+  niche: '',
+  followers: '',
+  status: 'new',
+  notes: '',
+  createdAt: '',
+}
+
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const item = localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch {
+      return initialValue
+    }
+  })
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value))
+  }, [key, value])
+
+  return [value, setValue]
+}
+
+// ─── Stat Card ────────────────────────────────────────────
+function StatCard({ icon: Icon, label, value, color, delay }) {
+  return (
+    <div
+      className="bg-surface-900 border border-surface-800 rounded-xl p-5 animate-fade-in"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
+          <Icon size={18} />
+        </div>
+      </div>
+      <p className="text-2xl font-bold font-mono tracking-tight">{value}</p>
+      <p className="text-sm text-surface-400 mt-1">{label}</p>
+    </div>
+  )
+}
+
+// ─── Status Badge ─────────────────────────────────────────
+function StatusBadge({ status }) {
+  const s = STATUSES.find(st => st.value === status) || STATUSES[0]
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}>
+      {s.label}
+    </span>
+  )
+}
+
+// ─── Status Dropdown (inline) ────────────────────────────
+function StatusDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const current = STATUSES.find(s => s.value === value) || STATUSES[0]
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all hover:ring-1 hover:ring-surface-600 ${current.color}`}
+      >
+        {current.label}
+        <ChevronDown size={12} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-xl py-1 min-w-[140px] animate-scale-in">
+            {STATUSES.map(s => (
+              <button
+                key={s.value}
+                onClick={(e) => { e.stopPropagation(); onChange(s.value); setOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-800 transition-colors flex items-center gap-2 ${value === s.value ? 'text-accent' : 'text-surface-300'}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${s.value === 'new' ? 'bg-surface-500' : s.value === 'contacted' ? 'bg-blue-400' : s.value === 'negotiating' ? 'bg-orange-400' : s.value === 'booked' ? 'bg-green-400' : s.value === 'declined' ? 'bg-stone-400' : 'bg-fuchsia-400'}`} />
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Creator Modal ────────────────────────────────────────
+function CreatorModal({ creator, onSave, onClose, isEdit }) {
+  const [form, setForm] = useState(creator)
+
+  const handleChange = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = () => {
+    if (!form.name.trim()) return
+    onSave({
+      ...form,
+      id: form.id || crypto.randomUUID(),
+      createdAt: form.createdAt || new Date().toISOString(),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onClose}>
+      <div
+        className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-800">
+          <h2 className="text-lg font-semibold">
+            {isEdit ? 'Edit Creator' : 'Add Creator'}
+          </h2>
+          <button onClick={onClose} className="text-surface-400 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-medium text-surface-400 mb-1.5">Name *</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => handleChange('name', e.target.value)}
+              placeholder="Creator name"
+              className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-surface-600 transition-all"
+            />
+          </div>
+
+          {/* Phone + Niche */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-surface-400 mb-1.5">Phone</label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={e => handleChange('phone', e.target.value)}
+                placeholder="+961 ..."
+                className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-surface-600 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-400 mb-1.5">Niche</label>
+              <select
+                value={form.niche}
+                onChange={e => handleChange('niche', e.target.value)}
+                className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3.5 py-2.5 text-sm text-white transition-all appearance-none cursor-pointer"
+              >
+                <option value="">Select niche</option>
+                {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Instagram + TikTok */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-surface-400 mb-1.5">Instagram</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500 text-sm">@</span>
+                <input
+                  type="text"
+                  value={form.instagram}
+                  onChange={e => handleChange('instagram', e.target.value)}
+                  placeholder="handle"
+                  className="w-full bg-surface-950 border border-surface-700 rounded-lg pl-7 pr-3.5 py-2.5 text-sm text-white placeholder-surface-600 transition-all"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-400 mb-1.5">TikTok</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500 text-sm">@</span>
+                <input
+                  type="text"
+                  value={form.tiktok}
+                  onChange={e => handleChange('tiktok', e.target.value)}
+                  placeholder="handle"
+                  className="w-full bg-surface-950 border border-surface-700 rounded-lg pl-7 pr-3.5 py-2.5 text-sm text-white placeholder-surface-600 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Followers + Status */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-surface-400 mb-1.5">Followers</label>
+              <input
+                type="text"
+                value={form.followers}
+                onChange={e => handleChange('followers', e.target.value)}
+                placeholder="e.g. 12.5K"
+                className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-surface-600 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-400 mb-1.5">Status</label>
+              <select
+                value={form.status}
+                onChange={e => handleChange('status', e.target.value)}
+                className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3.5 py-2.5 text-sm text-white transition-all appearance-none cursor-pointer"
+              >
+                {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-medium text-surface-400 mb-1.5">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={e => handleChange('notes', e.target.value)}
+              placeholder="Rates, availability, content style..."
+              rows={3}
+              className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-surface-600 transition-all resize-none"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-surface-800">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-surface-400 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!form.name.trim()}
+            className="px-5 py-2 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isEdit ? 'Save Changes' : 'Add Creator'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Delete Confirm ───────────────────────────────────────
+function DeleteConfirm({ name, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onCancel}>
+      <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-sm shadow-2xl animate-scale-in p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold mb-2">Delete Creator</h3>
+        <p className="text-sm text-surface-400 mb-5">
+          Remove <span className="text-white font-medium">{name}</span> from your tracker? This can't be undone.
+        </p>
+        <div className="flex items-center justify-end gap-3">
+          <button onClick={onCancel} className="px-4 py-2 text-sm text-surface-400 hover:text-white transition-colors">
+            Cancel
+          </button>
+          <button onClick={onConfirm} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Export CSV ────────────────────────────────────────────
+function exportCSV(creators) {
+  const headers = ['Name', 'Phone', 'Instagram', 'TikTok', 'Niche', 'Followers', 'Status', 'Notes', 'Added']
+  const rows = creators.map(c => [
+    c.name, c.phone, c.instagram, c.tiktok, c.niche, c.followers,
+    c.status, c.notes.replace(/,/g, ';'), new Date(c.createdAt).toLocaleDateString()
+  ])
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ugc-creators-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ─── Main App ─────────────────────────────────────────────
+export default function App() {
+  const [creators, setCreators] = useLocalStorage('ugc-creators', [])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editCreator, setEditCreator] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortField, setSortField] = useState('createdAt')
+  const [sortDir, setSortDir] = useState('desc')
+
+  // Stats
+  const stats = useMemo(() => {
+    const total = creators.length
+    const contacted = creators.filter(c => c.status === 'contacted').length
+    const negotiating = creators.filter(c => c.status === 'negotiating').length
+    const booked = creators.filter(c => c.status === 'booked').length
+    const completed = creators.filter(c => c.status === 'completed').length
+    const declined = creators.filter(c => c.status === 'declined').length
+    const active = contacted + negotiating + booked
+    const conversionRate = total > 0 ? Math.round(((booked + completed) / total) * 100) : 0
+    return { total, contacted, negotiating, booked, completed, declined, active, conversionRate }
+  }, [creators])
+
+  // Filtered & sorted
+  const filtered = useMemo(() => {
+    let list = [...creators]
+
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.instagram.toLowerCase().includes(q) ||
+        c.tiktok.toLowerCase().includes(q) ||
+        c.niche.toLowerCase().includes(q) ||
+        c.notes.toLowerCase().includes(q)
+      )
+    }
+
+    if (statusFilter !== 'all') {
+      list = list.filter(c => c.status === statusFilter)
+    }
+
+    list.sort((a, b) => {
+      const aVal = a[sortField] || ''
+      const bVal = b[sortField] || ''
+      const cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+    return list
+  }, [creators, search, statusFilter, sortField, sortDir])
+
+  const handleSave = (creator) => {
+    setCreators(prev => {
+      const exists = prev.find(c => c.id === creator.id)
+      if (exists) return prev.map(c => c.id === creator.id ? creator : c)
+      return [creator, ...prev]
+    })
+    setModalOpen(false)
+    setEditCreator(null)
+  }
+
+  const handleDelete = () => {
+    setCreators(prev => prev.filter(c => c.id !== deleteTarget.id))
+    setDeleteTarget(null)
+  }
+
+  const handleStatusChange = (id, newStatus) => {
+    setCreators(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c))
+  }
+
+  const toggleSort = (field) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return <ChevronDown size={12} className="text-surface-600" />
+    return sortDir === 'asc' ? <ChevronUp size={12} className="text-accent" /> : <ChevronDown size={12} className="text-accent" />
+  }
+
+  return (
+    <div className="min-h-screen bg-surface-950">
+      {/* ─── Header ─────────────────────────────────── */}
+      <header className="border-b border-surface-800 bg-surface-950/80 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-accent rounded-lg flex items-center justify-center">
+              <Zap size={18} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">UGC Unscripted</h1>
+              <p className="text-xs text-surface-500">Creator Tracker</p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setEditCreator(null); setModalOpen(true) }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-accent/20"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Add Creator</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* ─── Stats ──────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard icon={Users} label="Total Creators" value={stats.total} color="bg-surface-800 text-surface-300" delay={0} />
+          <StatCard icon={MessageCircle} label="Contacted" value={stats.contacted + stats.negotiating} color="bg-blue-950 text-blue-400" delay={50} />
+          <StatCard icon={CheckCircle} label="Booked" value={stats.booked} color="bg-green-950 text-green-400" delay={100} />
+          <StatCard icon={TrendingUp} label="Conversion" value={`${stats.conversionRate}%`} color="bg-orange-950 text-orange-400" delay={150} />
+        </div>
+
+        {/* ─── Pipeline mini-bar ──────────────────── */}
+        {stats.total > 0 && (
+          <div className="bg-surface-900 border border-surface-800 rounded-xl p-4 animate-fade-in" style={{ animationDelay: '200ms' }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-surface-400 uppercase tracking-wider">Pipeline</p>
+              <button
+                onClick={() => exportCSV(creators)}
+                className="flex items-center gap-1.5 text-xs text-surface-500 hover:text-accent transition-colors"
+              >
+                <Download size={12} />
+                Export CSV
+              </button>
+            </div>
+            <div className="flex rounded-full overflow-hidden h-2.5 bg-surface-800">
+              {stats.total > 0 && (
+                <>
+                  {stats.contacted > 0 && <div className="bg-blue-500 transition-all" style={{ width: `${(stats.contacted / stats.total) * 100}%` }} />}
+                  {stats.negotiating > 0 && <div className="bg-orange-500 transition-all" style={{ width: `${(stats.negotiating / stats.total) * 100}%` }} />}
+                  {stats.booked > 0 && <div className="bg-green-500 transition-all" style={{ width: `${(stats.booked / stats.total) * 100}%` }} />}
+                  {stats.completed > 0 && <div className="bg-fuchsia-500 transition-all" style={{ width: `${(stats.completed / stats.total) * 100}%` }} />}
+                  {stats.declined > 0 && <div className="bg-stone-600 transition-all" style={{ width: `${(stats.declined / stats.total) * 100}%` }} />}
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-4 mt-2.5 flex-wrap">
+              {[
+                { label: 'New', count: stats.total - stats.contacted - stats.negotiating - stats.booked - stats.completed - stats.declined, dot: 'bg-surface-500' },
+                { label: 'Contacted', count: stats.contacted, dot: 'bg-blue-500' },
+                { label: 'Negotiating', count: stats.negotiating, dot: 'bg-orange-500' },
+                { label: 'Booked', count: stats.booked, dot: 'bg-green-500' },
+                { label: 'Completed', count: stats.completed, dot: 'bg-fuchsia-500' },
+                { label: 'Declined', count: stats.declined, dot: 'bg-stone-600' },
+              ].filter(s => s.count > 0).map(s => (
+                <div key={s.label} className="flex items-center gap-1.5 text-xs text-surface-400">
+                  <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                  {s.label} ({s.count})
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Search + Filter ────────────────────── */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name, handle, niche..."
+              className="w-full bg-surface-900 border border-surface-800 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-surface-500 transition-all"
+            />
+          </div>
+          <div className="relative">
+            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500 pointer-events-none" />
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="bg-surface-900 border border-surface-800 rounded-lg pl-8 pr-8 py-2.5 text-sm text-white appearance-none cursor-pointer transition-all"
+            >
+              <option value="all">All Statuses</option>
+              {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* ─── Table ──────────────────────────────── */}
+        <div className="bg-surface-900 border border-surface-800 rounded-xl overflow-hidden animate-fade-in">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-surface-800 text-surface-400">
+                  <th className="text-left px-4 py-3 font-medium cursor-pointer select-none hover:text-surface-200 transition-colors" onClick={() => toggleSort('name')}>
+                    <span className="flex items-center gap-1">Name <SortIcon field="name" /></span>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Phone</th>
+                  <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Socials</th>
+                  <th className="text-left px-4 py-3 font-medium cursor-pointer select-none hover:text-surface-200 transition-colors" onClick={() => toggleSort('niche')}>
+                    <span className="flex items-center gap-1">Niche <SortIcon field="niche" /></span>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Followers</th>
+                  <th className="text-left px-4 py-3 font-medium cursor-pointer select-none hover:text-surface-200 transition-colors" onClick={() => toggleSort('status')}>
+                    <span className="flex items-center gap-1">Status <SortIcon field="status" /></span>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium hidden xl:table-cell">Notes</th>
+                  <th className="text-right px-4 py-3 font-medium w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-16 text-surface-500">
+                      {creators.length === 0 ? (
+                        <div className="space-y-3">
+                          <Users size={40} className="mx-auto text-surface-700" />
+                          <p className="font-medium text-surface-400">No creators yet</p>
+                          <p className="text-xs">Click "Add Creator" to start tracking</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="font-medium text-surface-400">No results found</p>
+                          <p className="text-xs">Try a different search or filter</p>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((creator, i) => (
+                    <tr
+                      key={creator.id}
+                      className="table-row border-b border-surface-800/50 last:border-0 animate-fade-in"
+                      style={{ animationDelay: `${i * 30}ms` }}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-white">{creator.name}</span>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        {creator.phone ? (
+                          <a href={`tel:${creator.phone}`} className="text-surface-400 hover:text-accent transition-colors font-mono text-xs">
+                            {creator.phone}
+                          </a>
+                        ) : (
+                          <span className="text-surface-700">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                          {creator.instagram && (
+                            <a
+                              href={`https://instagram.com/${creator.instagram}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs text-surface-400 hover:text-pink-400 transition-colors"
+                              title={`@${creator.instagram}`}
+                            >
+                              <Instagram size={13} />
+                              <span className="max-w-[80px] truncate">@{creator.instagram}</span>
+                            </a>
+                          )}
+                          {creator.tiktok && (
+                            <a
+                              href={`https://tiktok.com/@${creator.tiktok}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs text-surface-400 hover:text-cyan-400 transition-colors"
+                              title={`@${creator.tiktok}`}
+                            >
+                              <ExternalLink size={13} />
+                              <span className="max-w-[80px] truncate">@{creator.tiktok}</span>
+                            </a>
+                          )}
+                          {!creator.instagram && !creator.tiktok && <span className="text-surface-700">—</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {creator.niche ? (
+                          <span className="text-xs text-surface-300 bg-surface-800 px-2 py-0.5 rounded-md">{creator.niche}</span>
+                        ) : (
+                          <span className="text-surface-700">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="text-surface-300 font-mono text-xs">{creator.followers || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusDropdown
+                          value={creator.status}
+                          onChange={(newStatus) => handleStatusChange(creator.id, newStatus)}
+                        />
+                      </td>
+                      <td className="px-4 py-3 hidden xl:table-cell">
+                        <span className="text-xs text-surface-500 max-w-[200px] truncate block">{creator.notes || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => { setEditCreator(creator); setModalOpen(true) }}
+                            className="p-1.5 text-surface-500 hover:text-accent hover:bg-surface-800 rounded-md transition-all"
+                            title="Edit"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(creator)}
+                            className="p-1.5 text-surface-500 hover:text-red-400 hover:bg-surface-800 rounded-md transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table footer */}
+          {filtered.length > 0 && (
+            <div className="px-4 py-3 border-t border-surface-800 flex items-center justify-between text-xs text-surface-500">
+              <span>{filtered.length} creator{filtered.length !== 1 ? 's' : ''}</span>
+              <span>Data stored locally on this device</span>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ─── Modals ───────────────────────────────── */}
+      {modalOpen && (
+        <CreatorModal
+          creator={editCreator || emptyCreator}
+          onSave={handleSave}
+          onClose={() => { setModalOpen(false); setEditCreator(null) }}
+          isEdit={!!editCreator}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirm
+          name={deleteTarget.name}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </div>
+  )
+}
