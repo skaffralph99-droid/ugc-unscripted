@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Search, Users, Phone, MessageCircle, CheckCircle, XCircle,
   Edit3, Trash2, X, Instagram, ExternalLink, ChevronDown, ChevronUp,
-  Zap, TrendingUp, Filter, Download
+  Zap, TrendingUp, Filter, Download, CalendarDays, Clock, UserPlus, Handshake
 } from 'lucide-react'
 
 const STATUSES = [
@@ -30,6 +30,7 @@ const emptyCreator = {
   status: 'new',
   notes: '',
   createdAt: '',
+  statusUpdatedAt: '',
 }
 
 function useLocalStorage(key, initialValue) {
@@ -126,6 +127,7 @@ function CreatorModal({ creator, onSave, onClose, isEdit }) {
       ...form,
       id: form.id || crypto.randomUUID(),
       createdAt: form.createdAt || new Date().toISOString(),
+      statusUpdatedAt: form.statusUpdatedAt || new Date().toISOString(),
     })
   }
 
@@ -330,9 +332,36 @@ export default function App() {
     const booked = creators.filter(c => c.status === 'booked').length
     const completed = creators.filter(c => c.status === 'completed').length
     const declined = creators.filter(c => c.status === 'declined').length
+    const newCount = creators.filter(c => c.status === 'new').length
     const active = contacted + negotiating + booked
     const conversionRate = total > 0 ? Math.round(((booked + completed) / total) * 100) : 0
-    return { total, contacted, negotiating, booked, completed, declined, active, conversionRate }
+
+    // Time-based stats
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString()
+
+    const contactedToday = creators.filter(c =>
+      c.status !== 'new' && (c.statusUpdatedAt || c.createdAt) >= todayStart
+    ).length
+
+    const addedToday = creators.filter(c => c.createdAt >= todayStart).length
+
+    const addedThisWeek = creators.filter(c => c.createdAt >= weekStart).length
+
+    const bookedThisWeek = creators.filter(c =>
+      (c.status === 'booked' || c.status === 'completed') && (c.statusUpdatedAt || c.createdAt) >= weekStart
+    ).length
+
+    const responseRate = (contacted + negotiating + booked + completed + declined) > 0 && total > 0
+      ? Math.round(((negotiating + booked + completed) / (contacted + negotiating + booked + completed + declined)) * 100)
+      : 0
+
+    return {
+      total, contacted, negotiating, booked, completed, declined, newCount,
+      active, conversionRate, contactedToday, addedToday, addedThisWeek,
+      bookedThisWeek, responseRate
+    }
   }, [creators])
 
   // Filtered & sorted
@@ -380,7 +409,7 @@ export default function App() {
   }
 
   const handleStatusChange = (id, newStatus) => {
-    setCreators(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c))
+    setCreators(prev => prev.map(c => c.id === id ? { ...c, status: newStatus, statusUpdatedAt: new Date().toISOString() } : c))
   }
 
   const toggleSort = (field) => {
@@ -422,12 +451,20 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* ─── Stats ──────────────────────────────── */}
+        {/* ─── Stats Row 1 — Overview ─────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard icon={Users} label="Total Creators" value={stats.total} color="bg-surface-800 text-surface-300" delay={0} />
           <StatCard icon={MessageCircle} label="Contacted" value={stats.contacted + stats.negotiating} color="bg-blue-950 text-blue-400" delay={50} />
           <StatCard icon={CheckCircle} label="Booked" value={stats.booked} color="bg-green-950 text-green-400" delay={100} />
           <StatCard icon={TrendingUp} label="Conversion" value={`${stats.conversionRate}%`} color="bg-orange-950 text-orange-400" delay={150} />
+        </div>
+
+        {/* ─── Stats Row 2 — Today / This Week ────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard icon={Clock} label="Contacted Today" value={stats.contactedToday} color="bg-cyan-950 text-cyan-400" delay={200} />
+          <StatCard icon={UserPlus} label="Added Today" value={stats.addedToday} color="bg-violet-950 text-violet-400" delay={250} />
+          <StatCard icon={CalendarDays} label="Added This Week" value={stats.addedThisWeek} color="bg-indigo-950 text-indigo-400" delay={300} />
+          <StatCard icon={Handshake} label="Response Rate" value={`${stats.responseRate}%`} color="bg-emerald-950 text-emerald-400" delay={350} />
         </div>
 
         {/* ─── Pipeline mini-bar ──────────────────── */}
