@@ -94,7 +94,7 @@ function StatusDropdown({ value, onChange }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-xl py-1 min-w-[140px] animate-scale-in">
+          <div className="absolute bottom-full left-0 mb-1 z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-xl py-1 min-w-[140px] animate-scale-in">
             {STATUSES.map(s => (
               <button
                 key={s.value}
